@@ -1,0 +1,42 @@
+META_COT_CONFIG = {
+    # Project settings
+    "project": "coconut",
+    "name": "gsm-cot-baseline",
+    "only_eval": False,
+    
+    # Method configuration
+    "coconut": False,
+    "cot": True,
+    "no_thoughts": False,
+    "no_cot": False,
+    
+    # Model settings
+    "model_id": "openai-community/gpt2",
+    "load_model_path": None,
+    
+    # Training hyperparameters
+    # ── T4 BATCH SETTINGS (changed from A100) ─────────────────────────────
+    "batch_size_training": 8,          # T4: 16GB VRAM, GPT-2 safe at 8
+    "gradient_accumulation_steps": 4,  # effective batch = 32 (matches Meta)
+    # ──────────────────────────────────────────────────────────────────────
+    "num_epochs": 5,
+    "lr": 1e-4,
+    "weight_decay": 0.01,
+    "warmup_steps": 100,
+    
+    # Training settings
+    "bf16": False,
+    "debug": False,
+    "seed": 42,
+    "reset_optimizer": True,
+    
+    # Data paths
+    "train_path": f"{DATA_DIR}/gsm_train.json",
+    "val_path": f"{DATA_DIR}/gsm_valid.json",
+    
+    # Save settings
+    "save_path": directories["cot_baseline"],
+    "save_only_improve": True,
+    "log_every": 50,
+    "eval_every": 500,
+}
