@@ -1,0 +1,32 @@
+HOTPOTQA_COT_CONFIG = {
+    # Project settings
+    "project": "hotpotqa-agclr",
+    "name": "hotpotqa-cot-baseline",
+    "dataset_name": "hotpot_qa",
+    
+    # Method configuration
+    "coconut": False,        # Disable COCONUT for CoT training
+    "cot": True,            # Enable standard CoT training
+    
+    # Model settings
+    "model_id": "openai-community/gpt2",
+    
+    # Training hyperparameters - EFFICIENT
+    "batch_size_training": 32,         # A100 optimized
+    "gradient_accumulation_steps": 4,  # Effective batch size = 64
+    "num_epochs": 15,                   # Quick CoT baseline
+    "lr": 1e-4,                        # Meta's exact learning rate
+    "weight_decay": 0.01,              # Meta's exact weight decay
+    "warmup_steps": 100,
+    
+    # Dataset settings - SUBSAMPLING
+    "train_samples": 15000,            # vs 90K full (6x faster)
+    "val_samples": 3000,               # vs 7K full
+    "eval_samples": 500,               # Quick evaluation
+    
+    # Training settings
+    "bf16": False,
+    "seed": 42,
+    "max_length": 1024,                # Longer for HotpotQA context
+    "save_path": "./hotpotqa_cot_checkpoints",
+}
