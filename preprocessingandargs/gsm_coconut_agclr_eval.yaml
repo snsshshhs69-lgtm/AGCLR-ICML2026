@@ -1,1 +1,34 @@
-
+META_EVAL_CONFIG = {
+    # Project settings
+    "project": "coconut",
+    "name": "gsm-coconut-evaluation",
+    "only_eval": True,
+    
+    # Method configuration
+    "coconut": True,
+    "cot": False,
+    "no_thoughts": False,
+    "no_cot": False,
+    
+    # COCONUT parameters
+    "c_thought": 2,
+    "max_latent_stage": 3,
+    
+    # Model settings
+    "model_id": "openai-community/gpt2",
+    "load_model_path": None,
+    
+    # Evaluation settings
+    # ── T4 BATCH SETTINGS (changed from A100) ─────────────────────────────
+    "batch_size_training": 8,          # T4: eval only, no grad, safe at 8
+    # ──────────────────────────────────────────────────────────────────────
+    "bf16": False,
+    "debug": False,
+    "seed": 42,
+    
+    # Data paths
+    "val_path": f"{DATA_DIR}/gsm_valid.json",
+    
+    # Save settings
+    "save_path": directories["final_evaluation"],
+}
