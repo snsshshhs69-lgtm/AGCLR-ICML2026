@@ -1,0 +1,86 @@
+HOTPOTQA_COCONUT_CONFIG = {
+    # Project settings
+    "project": "hotpotqa-agclr",
+    "name": "hotpotqa-vanilla-coconut",
+    "dataset_name": "hotpot_qa",
+    
+    # Method configuration - COCONUT mode
+    "coconut": True,                   # Enable COCONUT training
+    "cot": False,
+    
+    # COCONUT-specific parameters - EFFICIENT CURRICULUM
+    "c_thought": 2,                    # Meta's exact: 2 continuous thoughts per step
+    "epochs_per_stage": 3,             # Stages 0,1,2 get 3 epochs each
+    "final_stage_epochs": 6,           # Stage 3 gets 6 epochs (focus on bottleneck)
+    "max_latent_stage": 3,             # Meta's exact: stages 0,1,2,3
+    "num_epochs": 15,                  # EFFICIENT: 3+3+3+6 = 15 total
+    
+    # Model settings
+    "model_id": "openai-community/gpt2",
+    
+    # Training hyperparameters
+    "batch_size_training": 32,         # A100 optimized
+    "gradient_accumulation_steps": 4,  # Effective batch size = 64
+    "lr": 1e-4,                        # Meta's exact learning rate
+    "weight_decay": 0.01,              # Meta's exact weight decay
+    "warmup_steps": 100,
+    "reset_optimizer": True,           # Reset between stages
+    
+    # Dataset settings - SAME SUBSAMPLING
+    "train_samples": 15000,            # 6x faster than full
+    "val_samples": 3000,
+    "eval_samples": 500,
+    
+    # Training settings
+    "bf16": False,
+    "seed": 42,
+    "max_length": 1024,                # HotpotQA needs longer context
+    "save_path": "./hotpotqa_vanilla_checkpoints",
+}
+
+# Stage 3: AGCLR Training (15 epochs - stable performance demo)
+HOTPOTQA_AGCLR_CONFIG = {
+    # Project settings
+    "project": "hotpotqa-agclr",
+    "name": "hotpotqa-agclr-enhanced",
+    "dataset_name": "hotpot_qa",
+    
+    # Method configuration - AGCLR mode
+    "agclr": True,                     # Enable AGCLR training
+    "coconut": True,                   # AGCLR builds on COCONUT
+    "cot": False,
+    
+    # AGCLR-specific parameters
+    "c_thought": 2,
+    "epochs_per_stage": 3,
+    "final_stage_epochs": 6,
+    "max_latent_stage": 3,
+    "num_epochs": 15,                  # Same curriculum as vanilla
+    
+    # Gated concept stream parameters
+    "gate_init_read": 0.0,             # Strategic initialization
+    "gate_init_forget": -0.5,
+    "gate_init_write": -1.0,
+    
+    # Model settings
+    "model_id": "openai-community/gpt2",
+    
+    # Training hyperparameters - SAME AS VANILLA
+    "batch_size_training": 32,
+    "gradient_accumulation_steps": 4,
+    "lr": 1e-4,
+    "weight_decay": 0.01,
+    "warmup_steps": 100,
+    "reset_optimizer": True,
+    
+    # Dataset settings - IDENTICAL TO VANILLA
+    "train_samples": 15000,
+    "val_samples": 3000,
+    "eval_samples": 500,
+    
+    # Training settings
+    "bf16": False,
+    "seed": 42,
+    "max_length": 1024,
+    "save_path": "./hotpotqa_agclr_checkpoints",
+}
