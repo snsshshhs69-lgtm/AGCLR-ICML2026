@@ -1,1 +1,105 @@
 
+META_COCONUT_CONFIG = {
+    # Project settings
+    "project": "coconut",
+    "name": "gsm-coconut-curriculum",
+    "only_eval": False,
+    
+    # Method configuration
+    "coconut": True,
+    "cot": False,
+    "no_thoughts": False,
+    "no_cot": False,
+    
+    # COCONUT-specific parameters — UNCHANGED from Meta
+    "c_thought": 2,
+    "epochs_per_stage": 3,
+    "max_latent_stage": 3,
+    "pad_latent_to_max": True,
+    "uniform_prob": 0.0,
+    
+    # Model settings
+    "model_id": "openai-community/gpt2",
+    "load_model_path": None,
+    
+    # Training hyperparameters
+    # ── T4 BATCH SETTINGS (changed from A100) ─────────────────────────────
+    "batch_size_training": 4,          # T4: reduced for multi-pass overhead
+    "gradient_accumulation_steps": 8,  # effective batch = 32 (matches Meta)
+    # ──────────────────────────────────────────────────────────────────────
+    "num_epochs": 25,
+    "lr": 1e-4,
+    "weight_decay": 0.01,
+    "warmup_steps": 100,
+    
+    # Training settings
+    "bf16": False,
+    "debug": False,
+    "seed": 42,
+    "resume": 0,
+    "reset_optimizer": True,
+    
+    # Data paths
+    "train_path": f"{DATA_DIR}/gsm_train.json",
+    "val_path": f"{DATA_DIR}/gsm_valid.json",
+    
+    # Save settings
+    "save_path": directories["coconut_training"],
+    "save_only_improve": False,
+    "log_every": 50,
+    "eval_every": 200,
+    "gradient_clip": 1.0,
+}
+
+# AGCLR Configuration — same curriculum as COCONUT
+META_AGCLR_CONFIG = {
+    # Project settings
+    "project": "coconut",
+    "name": "gsm-agclr-curriculum",
+    "only_eval": False,
+
+    # Method configuration
+    "coconut": True,
+    "cot": False,
+    "no_thoughts": False,
+    "no_cot": False,
+
+    # COCONUT-specific parameters — UNCHANGED from Meta
+    "c_thought": 2,
+    "epochs_per_stage": 3,
+    "max_latent_stage": 3,
+    "pad_latent_to_max": True,
+    "uniform_prob": 0.0,
+
+    # Model settings
+    "model_id": "openai-community/gpt2",
+    "load_model_path": None,
+
+    # Training hyperparameters
+    # ── T4 BATCH SETTINGS (changed from A100) ─────────────────────────────
+    "batch_size_training": 4,          # T4: AGCLR has gate overhead on top
+    "gradient_accumulation_steps": 8,  # effective batch = 32 (matches Meta)
+    # ──────────────────────────────────────────────────────────────────────
+    "num_epochs": 25,
+    "lr": 1e-4,
+    "weight_decay": 0.01,
+    "warmup_steps": 100,
+
+    # Training settings
+    "bf16": False,
+    "debug": False,
+    "seed": 42,
+    "resume": 0,
+    "reset_optimizer": True,
+
+    # Data paths
+    "train_path": f"{DATA_DIR}/gsm_train.json",
+    "val_path": f"{DATA_DIR}/gsm_valid.json",
+
+    # Save settings
+    "save_path": directories["agclr_training"],
+    "save_only_improve": False,
+    "log_every": 50,
+    "eval_every": 200,
+    "gradient_clip": 1.0,
+}
