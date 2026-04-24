@@ -1,0 +1,215 @@
+
+
+import os
+import time
+import torch
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from transformers import AutoModelForCausalLM
+
+
+checkpoint_path = chkpt_path
+
+if not os.path.exists(checkpoint_path):
+    print(f"❌ Not found at {checkpoint_path}")
+    print("📋 Available checkpoints:")
+    for f in sorted(os.listdir(agclr_config.save_path)):
+        if f.endswith(".pt"):
+            print(f"   {f}")
+    raise FileNotFoundError("checkpoint_epoch_11.pt not found")
+
+print(f"📥 Loading checkpoint: {checkpoint_path}")
+checkpoint_e11 = torch.load(checkpoint_path, map_location=device, weights_only=False)
+
+print(f"✅ Checkpoint loaded")
+print(f"   Epoch:          {checkpoint_e11['epoch']}")
+print(f"   Stage:          {checkpoint_e11['scheduled_stage']} "
+      f"({checkpoint_e11['n_latent_tokens']} latent tokens)")
+print(f"   Train loss:     {checkpoint_e11['train_loss']:.4f}")
+print(f"   Val loss:       {checkpoint_e11['val_loss']:.4f}")
+print(f"   Accuracy (100): {checkpoint_e11['accuracy']:.1%}")
+print(f"   Gate R:         {checkpoint_e11['gate_r']:.3f}")
+print(f"   Gate F:         {checkpoint_e11['gate_f']:.3f}")
+print(f"   Gate W:         {checkpoint_e11['gate_w']:.3f}")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reconstruct AGCLR Model
+# ──────────────────────────────────────────────────────────────────────────────
+
+print("\n🔧 Reconstructing AGCLR model from epoch 11 weights...")
+
+eval_base = AutoModelForCausalLM.from_pretrained(agclr_config.model_id)
+eval_base.resize_token_embeddings(len(tokenizer))
+initialize_special_tokens(eval_base, tokenizer, start_id, end_id, latent_id)
+
+agclr_eval = AGCLR(
+    base_causallm   = eval_base,
+    latent_token_id = latent_id,
+    start_latent_id = start_id,
+    end_latent_id   = end_id,
+    eos_token_id    = tokenizer.eos_token_id,
+).to(device)
+
+agclr_eval.load_state_dict(checkpoint_e11['model_state_dict'])
+agclr_eval.eval()
+
+print(f"✅ AGCLR epoch 11 model ready")
+print(f"   Gates restored: R={agclr_eval.gated_concept_stream.last_r:.3f}  "
+      f"F={agclr_eval.gated_concept_stream.last_f:.3f}  "
+      f"W={agclr_eval.gated_concept_stream.last_w:.3f}")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Evaluation on 500 Samples
+# ──────────────────────────────────────────────────────────────────────────────
+
+def evaluate_agclr_epoch11(model, num_samples=500):
+    """
+    Full evaluation on 500 samples at stage 3 (6 latent tokens).
+    Uses same generate_hotpotqa_answer logic as CoT baseline for fair comparison.
+    """
+    print(f"\n🧪 Running full evaluation on {num_samples} samples...")
+    print(f"   Stage: 3 — 6 latent tokens")
+
+    eval_samples = valid_data[:min(num_samples, len(valid_data))]
+
+    results    = []
+    em_scores  = []
+    f1_scores  = []
+    hop_counts = []
+
+    start_time = time.time()
+    eval_pbar  = tqdm(eval_samples, desc="AGCLR Epoch 11 Eval", colour="red")
+
+    for idx, sample in enumerate(eval_pbar):
+        try:
+            question_text  = sample["question"]
+            question_input = question_text + "\n### "
+            question_tokens = tokenizer.encode(question_input, add_special_tokens=True)
+
+            generated_answer = generate_hotpotqa_answer(
+                model, question_tokens, max_new_tokens=30
+            )
+
+            gold_answer = sample["answer"]
+            hop_count   = sample.get("hop_count", 2)
+
+            em = exact_match(generated_answer, gold_answer)
+            f1 = f1_score(generated_answer, gold_answer)
+
+            result = {
+                "idx":              idx,
+                "question":         question_text[:100] + "...",
+                "gold_answer":      gold_answer,
+                "generated_answer": generated_answer,
+                "exact_match":      em,
+                "f1_score":         f1,
+                "hop_count":        hop_count,
+            }
+            results.append(result)
+
+            em_scores.append(em)
+            f1_scores.append(f1)
+            hop_counts.append(hop_count)
+
+            current_em = sum(em_scores) / len(em_scores)
+            current_f1 = sum(f1_scores) / len(f1_scores)
+            eval_pbar.set_postfix({
+                'EM': f'{current_em:.3f}',
+                'F1': f'{current_f1:.3f}',
+                'R':  f'{model.gated_concept_stream.last_r:.3f}',
+                'F':  f'{model.gated_concept_stream.last_f:.3f}',
+                'W':  f'{model.gated_concept_stream.last_w:.3f}',
+            })
+
+            if (idx + 1) % 100 == 0:
+                print(f"\n📝 Example {idx + 1}:")
+                print(f"   Q:    {result['question']}")
+                print(f"   Gold: {result['gold_answer']}")
+                print(f"   Gen:  {result['generated_answer']}")
+                print(f"   EM: {em}  F1: {f1:.3f}  Hops: {hop_count}")
+
+        except Exception as e:
+            print(f"⚠️ Error on sample {idx}: {e}")
+            continue
+
+    eval_pbar.close()
+
+    overall_em  = sum(em_scores) / len(em_scores) if em_scores else 0
+    overall_f1  = sum(f1_scores) / len(f1_scores) if f1_scores else 0
+    eval_time   = time.time() - start_time
+
+    return {
+        "overall_em":           overall_em,
+        "overall_f1":           overall_f1,
+        "num_evaluated":        len(em_scores),
+        "eval_time_minutes":    eval_time / 60,
+        "results":              results,
+        "hop_distribution":     {h: hop_counts.count(h) for h in set(hop_counts)},
+        "gate_r":               model.gated_concept_stream.last_r,
+        "gate_f":               model.gated_concept_stream.last_f,
+        "gate_w":               model.gated_concept_stream.last_w,
+    }
+
+
+agclr_e11_results = evaluate_agclr_epoch11(agclr_eval, num_samples=500)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Display Results
+# ──────────────────────────────────────────────────────────────────────────────
+
+print(f"\n{'='*60}")
+print(f"🔥 AGCLR EPOCH 11 — FULL EVALUATION RESULTS")
+print(f"{'='*60}")
+
+print(f"\n📊 OVERALL PERFORMANCE (Stage 3 — 6 latent tokens):")
+print(f"   🎯 Exact Match (EM): {agclr_e11_results['overall_em']:.1%}")
+print(f"   📝 F1 Score:         {agclr_e11_results['overall_f1']:.1%}")
+print(f"   📋 Samples:          {agclr_e11_results['num_evaluated']}")
+print(f"   ⏱️  Eval time:        {agclr_e11_results['eval_time_minutes']:.1f} minutes")
+
+print(f"\n🧠 GATE VALUES AT EVALUATION:")
+print(f"   R (read):   {agclr_e11_results['gate_r']:.3f}  (init: 0.430)")
+print(f"   F (forget): {agclr_e11_results['gate_f']:.3f}  (init: 0.270)")
+print(f"   W (write):  {agclr_e11_results['gate_w']:.3f}  (init: 0.180)")
+
+print(f"\n📈 COMPARISON (so far):")
+print(f"   CoT baseline (epoch 2):       EM=11.0%  F1=15.5%")
+print(f"   AGCLR epoch 11 (6 latents):   "
+      f"EM={agclr_e11_results['overall_em']:.1%}  "
+      f"F1={agclr_e11_results['overall_f1']:.1%}")
+print(f"   Delta vs CoT:                 "
+      f"EM={agclr_e11_results['overall_em'] - 0.11:+.1%}  "
+      f"F1={agclr_e11_results['overall_f1'] - 0.155:+.1%}")
+
+print(f"\n🔍 COMPLEXITY BREAKDOWN:")
+for hop in sorted(agclr_e11_results['hop_distribution'].keys()):
+    count  = agclr_e11_results['hop_distribution'][hop]
+    hop_em = sum(1 for r in agclr_e11_results['results']
+                 if r['hop_count'] == hop and r['exact_match']) / count
+    hop_f1 = sum(r['f1_score'] for r in agclr_e11_results['results']
+                 if r['hop_count'] == hop) / count
+    print(f"   {hop}-hop: {count} samples — EM={hop_em:.1%}  F1={hop_f1:.3f}")
+
+print(f"\n✅ CORRECT EXAMPLES:")
+correct = [r for r in agclr_e11_results['results'] if r['exact_match']]
+for i, ex in enumerate(correct[:3]):
+    print(f"\n   Example {i+1}:")
+    print(f"   Q:    {ex['question']}")
+    print(f"   Gold: {ex['gold_answer']}")
+    print(f"   Gen:  {ex['generated_answer']}")
+
+print(f"\n❌ CHALLENGING EXAMPLES:")
+wrong = [r for r in agclr_e11_results['results'] if not r['exact_match']]
+for i, ex in enumerate(wrong[:3]):
+    print(f"\n   Example {i+1}:")
+    print(f"   Q:    {ex['question']}")
+    print(f"   Gold: {ex['gold_answer']}")
+    print(f"   Gen:  {ex['generated_answer']}")
+    print(f"   F1:   {ex['f1_score']:.3f}")
+
+# Store for paper
+globals().update({'agclr_e11_results': agclr_e11_results})
+
+print(f"\n🎉 AGCLR EPOCH 11 EVALUATION COMPLETE")
+print(f"   Best result saved in agclr_e11_results")
+print(f"   Next: run vanilla CoCoNuT to same stage for comparison")
